@@ -307,7 +307,7 @@ public:
         return 0;
     }
 
-    bool setProperty(int property_id, int32_t value) CV_OVERRIDE
+    bool setProperty(int property_id, double value) CV_OVERRIDE
     {
         if (!isOpened) {
             return false;
@@ -321,7 +321,7 @@ public:
         return 0;
     }
 
-    void setFps(int32_t value)
+    bool setFps(int32_t value)
     {
     	int32_t fps_range[2]; // min max
         fps_range[0] = value;
@@ -329,8 +329,10 @@ public:
         cStatus = ACaptureRequest_setEntry_i32(request, ACAMERA_CONTROL_AE_TARGET_FPS_RANGE, 2, fps_range);
         if (cStatus == ACAMERA_OK) {
             fps = value;
+            return true;
         } else {
             LOGE("Failed to set target fps range in capture request, error: %d.", cStatus);
+            return false;
         }
     }
 
