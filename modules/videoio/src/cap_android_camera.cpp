@@ -144,6 +144,7 @@ class AndroidCameraCapture : public IVideoCapture
     int32_t frameWidth;
     int32_t frameHeight;
     int32_t colorFormat;
+    int32_t fps;
     std::vector<uint8_t> buffer;
     bool sessionOutputAdded = false;
     bool targetAdded = false;
@@ -199,6 +200,10 @@ public:
     bool isOpened() const CV_OVERRIDE { return imageReader.get() != nullptr && captureSession.get() != nullptr; }
 
     int getCaptureDomain() CV_OVERRIDE { return CAP_ANDROID; }
+
+    double getProperty(int) const CV_OVERRIDE;
+
+    bool setProperty(int, int32_t) CV_OVERRIDE;
 
     bool grabFrame() CV_OVERRIDE
     {
@@ -287,14 +292,46 @@ public:
         return true;
     }
 
-    double getProperty(int /* property_id */) const CV_OVERRIDE
+    double getProperty(int property_id) const CV_OVERRIDE
     {
+        switch (property_id)
+        {
+            case CV_CAP_PROP_FRAME_WIDTH:
+                return frameWidth;
+            case CV_CAP_PROP_FRAME_HEIGHT:
+                return frameHeight;
+            case CV_CAP_PROP_FPS:
+                return fps;
+
+        }
         return 0;
     }
 
-    bool setProperty(int /* property_id */, double /* value */) CV_OVERRIDE
+    bool setProperty(int property_id, int32_t value) CV_OVERRIDE
     {
-        return false;
+        if (!isOpened) {
+            return false;
+        }
+
+        switch (property_id)
+        {
+            case CV_CAP_PROP_FPS:
+                return setFps(value);
+        }
+        return 0;
+    }
+
+    void setFps(int32_t value)
+    {
+    	int32_t fps_range[2]; // min max
+        fps_range[0] = value;
+        fps_range[1] = value;
+        cStatus = ACaptureRequest_setEntry_i32(request, ACAMERA_CONTROL_AE_TARGET_FPS_RANGE, 2, fps_range);
+        if (cStatus == ACAMERA_OK) {
+            fps = value;
+        } else {
+            LOGE("Failed to set target fps range in capture request, error: %d.", cStatus);
+        }
     }
 
     bool initCapture(int index)
