@@ -428,7 +428,7 @@ public:
         outputTarget = std::shared_ptr<ACameraOutputTarget>(target, deleter_ACameraOutputTarget);
 
         ACaptureRequest * request;
-        cStatus = ACameraDevice_createCaptureRequest(cameraDevice.get(), TEMPLATE_PREVIEW, &request);
+        cStatus = ACameraDevice_createCaptureRequest(cameraDevice.get(), TEMPLATE_RECORD, &request);
         if (cStatus != ACAMERA_OK) {
             LOGE("CaptureRequest creation failed with error code: %d", cStatus);
             return false;
