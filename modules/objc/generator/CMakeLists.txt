@@ -83,4 +83,10 @@ add_custom_target(gen_opencv_objc_source DEPENDS ${objc_generated_files}
             "${CMAKE_CURRENT_BINARY_DIR}/gen_objc.json"
 )
 
-add_dependencies(opencv_world gen_opencv_objc_source)
+if(BUILD_opencv_world)
+  add_dependencies(opencv_world gen_opencv_objc_source)
+else()
+  foreach(m ${OPENCV_OBJC_MODULES})
+    add_dependencies(${m} gen_opencv_objc_source)
+  endforeach(m)
+endif()
