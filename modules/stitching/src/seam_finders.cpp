@@ -49,7 +49,7 @@ namespace detail {
 
 Ptr<SeamFinder> SeamFinder::createDefault(int type)
 {
-    if (type == NO)
+    if (type == NONE)
         return makePtr<NoSeamFinder>();
     if (type == VORONOI_SEAM)
         return makePtr<VoronoiSeamFinder>();

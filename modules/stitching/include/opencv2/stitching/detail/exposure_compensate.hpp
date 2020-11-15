@@ -43,10 +43,6 @@
 #ifndef OPENCV_STITCHING_EXPOSURE_COMPENSATE_HPP
 #define OPENCV_STITCHING_EXPOSURE_COMPENSATE_HPP
 
-#if defined(NO)
-#  warning Detected Apple 'NO' macro definition, it can cause build conflicts. Please, include this header before any Apple headers.
-#endif
-
 #include "opencv2/core.hpp"
 
 namespace cv {
@@ -63,7 +59,10 @@ public:
     ExposureCompensator(): updateGain(true) {}
     virtual ~ExposureCompensator() {}
 
-    enum { NO, GAIN, GAIN_BLOCKS, CHANNELS, CHANNELS_BLOCKS };
+    enum { NONE, GAIN, GAIN_BLOCKS, CHANNELS, CHANNELS_BLOCKS };
+    /** @brief Create ExposureCompensator object
+    @param type Type of exposure compensator (NOTE: NO has been renamed to NONE)
+     */
     CV_WRAP static Ptr<ExposureCompensator> createDefault(int type);
 
     /**

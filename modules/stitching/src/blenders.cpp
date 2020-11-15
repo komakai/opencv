@@ -67,7 +67,7 @@ static const float WEIGHT_EPS = 1e-5f;
 
 Ptr<Blender> Blender::createDefault(int type, bool try_gpu)
 {
-    if (type == NO)
+    if (type == NONE)
         return makePtr<Blender>();
     if (type == FEATHER)
         return makePtr<FeatherBlender>(try_gpu);

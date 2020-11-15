@@ -59,7 +59,7 @@ class CV_EXPORTS_W SeamFinder
 {
 public:
     CV_WRAP  virtual ~SeamFinder() {}
-    enum { NO, VORONOI_SEAM, DP_SEAM };
+    enum { NONE, VORONOI_SEAM, DP_SEAM };
     /** @brief Estimates seams.
 
     @param src Source images
@@ -68,6 +68,9 @@ public:
      */
     CV_WRAP virtual void find(const std::vector<UMat> &src, const std::vector<Point> &corners,
                       CV_IN_OUT std::vector<UMat> &masks) = 0;
+    /** @brief Create SeamFinder object
+    @param type Type of seam finder (NOTE: NO has been renamed to NONE)
+     */
     CV_WRAP static Ptr<SeamFinder> createDefault(int type);
 };
 

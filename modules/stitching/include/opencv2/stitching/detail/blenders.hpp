@@ -43,10 +43,6 @@
 #ifndef OPENCV_STITCHING_BLENDERS_HPP
 #define OPENCV_STITCHING_BLENDERS_HPP
 
-#if defined(NO)
-#  warning Detected Apple 'NO' macro definition, it can cause build conflicts. Please, include this header before any Apple headers.
-#endif
-
 #include "opencv2/core.hpp"
 #include "opencv2/core/cuda.hpp"
 
@@ -65,7 +61,11 @@ class CV_EXPORTS_W Blender
 public:
     virtual ~Blender() {}
 
-    enum { NO, FEATHER, MULTI_BAND };
+    enum { NONE, FEATHER, MULTI_BAND };
+    /** @brief Create Blender object
+    @param type Type of blender (NOTE: NO has been renamed to NONE)
+    @param try_gpu if true attempt to use GPU
+     */
     CV_WRAP static Ptr<Blender> createDefault(int type, bool try_gpu = false);
 
     /** @brief Prepares the blender for blending.

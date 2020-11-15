@@ -52,7 +52,7 @@ namespace detail {
 Ptr<ExposureCompensator> ExposureCompensator::createDefault(int type)
 {
     Ptr<ExposureCompensator> e;
-    if (type == NO)
+    if (type == NONE)
         e = makePtr<NoExposureCompensator>();
     else if (type == GAIN)
         e = makePtr<GainCompensator>();
