@@ -1,3 +1,4 @@
+cmake_minimum_required(VERSION 3.19 FATAL_ERROR)
 # load settings in case of "try compile"
 set(TOOLCHAIN_CONFIG_FILE "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/toolchain.config.cmake")
 get_property(__IN_TRY_COMPILE GLOBAL PROPERTY IN_TRY_COMPILE)
