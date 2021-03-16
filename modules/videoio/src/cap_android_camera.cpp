@@ -326,7 +326,8 @@ public:
         if (colorFormat == COLOR_FormatYUV420Planar) {
             cv::cvtColor(yuv, out, convertToRgb ? cv::COLOR_YUV2RGB_YV12 : cv::COLOR_YUV2BGR_YV12);
         } else if (colorFormat == COLOR_FormatYUV420SemiPlanar) {
-            cv::cvtColor(yuv, out, convertToRgb ? COLOR_YUV2RGB_NV21 : cv::COLOR_YUV2BGR_NV21);
+            cv::cvtColor(yuv, out, convertToRgb ? cv::COLOR_YUV2RGB_NV21 : cv::COLOR_YUV2BGR_NV21);
+
         } else {
             LOGE("Unsupported video format: %d", colorFormat);
             return false;
@@ -392,18 +393,36 @@ public:
                 if (isOpened() && exposureRange.Supported()) {
                     exposureTime = (int64_t)value;
                     camera_status_t status = ACaptureRequest_setEntry_i64(captureRequest.get(), ACAMERA_SENSOR_EXPOSURE_TIME, 1, &exposureTime);
-                    return status == ACAMERA_OK;
+                    if (status == ACAMERA_OK) {
+                        break;
+                    }
                 }
-                break;
+                return false;
             case CV_CAP_PROP_ISO_SPEED:
                 if (isOpened() && sensitivityRange.Supported()) {
                     sensitivity = (int32_t)value;
                     camera_status_t status = ACaptureRequest_setEntry_i32(captureRequest.get(), ACAMERA_SENSOR_SENSITIVITY, 1, &sensitivity);
-                    return status == ACAMERA_OK;
+                    if (status == ACAMERA_OK) {
+                        break;
+                    }
                 }
-                break;
+                return false;
             default:
                 break;
+        }
+
+        if(property_id == CV_CAP_PROP_EXPOSURE || property_id == CV_CAP_PROP_ISO_SPEED) {
+            if(autoExposure){
+                uint8_t aeModeOff = ACAMERA_CONTROL_AE_MODE_OFF;
+                camera_status_t status = ACaptureRequest_setEntry_u8(captureRequest.get(), ACAMERA_CONTROL_AE_MODE, 1, &aeModeOff);
+                if(status != ACAMERA_OK) {
+                    return false;
+                }
+                autoExposure = false;
+            }
+            ACaptureRequest* request = captureRequest.get();
+            camera_status_t status = ACameraCaptureSession_setRepeatingRequest(captureSession.get(), GetCaptureCallback(), 1, &request, nullptr);
+            return status == ACAMERA_OK;
         }
         return false;
     }
