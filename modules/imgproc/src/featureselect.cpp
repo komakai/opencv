@@ -270,6 +270,211 @@ static bool ocl_goodFeaturesToTrack( InputArray _image, OutputArray _corners,
     return true;
 }
 
+
+static bool ocl_betterFeaturesToTrack( InputArray _image, OutputArray _corners,
+                                       int maxCorners, double qualityLevel, double minDistance,
+                                       InputArray _mask, OutputArray _cornersQuality, int blockSize, int gradientSize,
+                                       bool useHarrisDetector, double harrisK)
+{
+    UMat eig, eigDiagonal, maxEigenValue;
+    if( useHarrisDetector ) {
+        cornerHarris( _image, eig, blockSize, gradientSize, harrisK );
+        cornerHarrisDiagonal( _image, eigDiagonal, blockSize, gradientSize, harrisK );
+    } else {
+        cornerMinEigenVal( _image, eig, blockSize, gradientSize );
+        cornerMinEigenValDiagonal( _image, eigDiagonal, blockSize, gradientSize );
+    }
+
+    UMat eigMax;
+    cv::max(eig, eigDiagonal, eigMax);
+
+    Size imgsize = _image.size();
+    size_t total, i, j, ncorners = 0, possibleCornersCount =
+            std::max(1024, static_cast<int>(imgsize.area() * 0.1));
+    bool haveMask = !_mask.empty();
+    UMat corners_buffer(1, (int)possibleCornersCount + 1, CV_32FC2);
+    CV_Assert(sizeof(Corner) == corners_buffer.elemSize());
+    Mat tmpCorners;
+
+    // find threshold
+    {
+        CV_Assert(eigMax.type() == CV_32FC1);
+        int dbsize = ocl::Device::getDefault().maxComputeUnits();
+        size_t wgs = ocl::Device::getDefault().maxWorkGroupSize();
+
+        int wgs2_aligned = 1;
+        while (wgs2_aligned < (int)wgs)
+            wgs2_aligned <<= 1;
+        wgs2_aligned >>= 1;
+
+        ocl::Kernel k("maxEigenVal", ocl::imgproc::gftt_oclsrc,
+                      format("-D OP_MAX_EIGEN_VAL -D WGS=%d -D groupnum=%d -D WGS2_ALIGNED=%d%s",
+                             (int)wgs, dbsize, wgs2_aligned, haveMask ? " -D HAVE_MASK" : ""));
+        if (k.empty())
+            return false;
+
+        UMat mask = _mask.getUMat();
+        maxEigenValue.create(1, dbsize, CV_32FC1);
+
+        ocl::KernelArg eigarg = ocl::KernelArg::ReadOnlyNoSize(eigMax),
+                dbarg = ocl::KernelArg::PtrWriteOnly(maxEigenValue),
+                maskarg = ocl::KernelArg::ReadOnlyNoSize(mask),
+                cornersarg = ocl::KernelArg::PtrWriteOnly(corners_buffer);
+
+        if (haveMask)
+            k.args(eigarg, eigMax.cols, (int)eigMax.total(), dbarg, maskarg);
+        else
+            k.args(eigarg, eigMax.cols, (int)eigMax.total(), dbarg);
+
+        size_t globalsize = dbsize * wgs;
+        if (!k.run(1, &globalsize, &wgs, false))
+            return false;
+
+        ocl::Kernel k2("maxEigenValTask", ocl::imgproc::gftt_oclsrc,
+                       format("-D OP_MAX_EIGEN_VAL -D WGS=%zu -D WGS2_ALIGNED=%d -D groupnum=%d",
+                              wgs, wgs2_aligned, dbsize));
+        if (k2.empty())
+            return false;
+
+        k2.args(dbarg, (float)qualityLevel, cornersarg);
+
+        if (!k2.runTask(false))
+            return false;
+    }
+
+    // collect list of pointers to features - put them into temporary image
+    {
+        ocl::Kernel k("findCorners", ocl::imgproc::gftt_oclsrc,
+                      format("-D OP_FIND_CORNERS%s", haveMask ? " -D HAVE_MASK" : ""));
+        if (k.empty())
+            return false;
+
+        ocl::KernelArg eigarg = ocl::KernelArg::ReadOnlyNoSize(eigMax),
+                cornersarg = ocl::KernelArg::PtrWriteOnly(corners_buffer),
+                thresholdarg = ocl::KernelArg::PtrReadOnly(maxEigenValue);
+
+        if (!haveMask)
+            k.args(eigarg, cornersarg, eigMax.rows - 2, eigMax.cols - 2, thresholdarg,
+                  (int)possibleCornersCount);
+        else
+        {
+            UMat mask = _mask.getUMat();
+            k.args(eigarg, ocl::KernelArg::ReadOnlyNoSize(mask),
+                   cornersarg, eigMax.rows - 2, eigMax.cols - 2,
+                   thresholdarg, (int)possibleCornersCount);
+        }
+
+        size_t globalsize[2] = { (size_t)eigMax.cols - 2, (size_t)eigMax.rows - 2 };
+        if (!k.run(2, globalsize, NULL, false))
+            return false;
+
+        tmpCorners = corners_buffer.getMat(ACCESS_RW);
+        total = std::min<size_t>(tmpCorners.at<Vec2i>(0, 0)[0], possibleCornersCount);
+        if (total == 0)
+        {
+            _corners.release();
+            return true;
+        }
+    }
+
+    Corner* corner_ptr = tmpCorners.ptr<Corner>() + 1;
+    std::sort(corner_ptr, corner_ptr + total);
+
+    std::vector<Point2f> corners;
+    std::vector<float> cornersQuality;
+    corners.reserve(total);
+    cornersQuality.reserve(total);
+
+    if (minDistance >= 1)
+    {
+         // Partition the image into larger grids
+        int w = imgsize.width, h = imgsize.height;
+
+        const int cell_size = cvRound(minDistance);
+        const int grid_width = (w + cell_size - 1) / cell_size;
+        const int grid_height = (h + cell_size - 1) / cell_size;
+
+        std::vector<std::vector<Point2f> > grid(grid_width*grid_height);
+        minDistance *= minDistance;
+
+        for( i = 0; i < total; i++ )
+        {
+            const Corner & c = corner_ptr[i];
+            bool good = true;
+
+            int x_cell = c.x / cell_size;
+            int y_cell = c.y / cell_size;
+
+            int x1 = x_cell - 1;
+            int y1 = y_cell - 1;
+            int x2 = x_cell + 1;
+            int y2 = y_cell + 1;
+
+            // boundary check
+            x1 = std::max(0, x1);
+            y1 = std::max(0, y1);
+            x2 = std::min(grid_width - 1, x2);
+            y2 = std::min(grid_height - 1, y2);
+
+            for( int yy = y1; yy <= y2; yy++ )
+                for( int xx = x1; xx <= x2; xx++ )
+                {
+                    std::vector<Point2f> &m = grid[yy * grid_width + xx];
+
+                    if( m.size() )
+                    {
+                        for(j = 0; j < m.size(); j++)
+                        {
+                            float dx = c.x - m[j].x;
+                            float dy = c.y - m[j].y;
+
+                            if( dx*dx + dy*dy < minDistance )
+                            {
+                                good = false;
+                                goto break_out;
+                            }
+                        }
+                    }
+                }
+
+            break_out:
+
+            if (good)
+            {
+                grid[y_cell*grid_width + x_cell].push_back(Point2f((float)c.x, (float)c.y));
+
+                corners.push_back(Point2f((float)c.x, (float)c.y));
+                cornersQuality.push_back(c.val);
+                ++ncorners;
+
+                if( maxCorners > 0 && (int)ncorners == maxCorners )
+                    break;
+            }
+        }
+    }
+    else
+    {
+        for( i = 0; i < total; i++ )
+        {
+            const Corner & c = corner_ptr[i];
+
+            corners.push_back(Point2f((float)c.x, (float)c.y));
+            cornersQuality.push_back(c.val);
+            ++ncorners;
+
+            if( maxCorners > 0 && (int)ncorners == maxCorners )
+                break;
+        }
+    }
+
+    Mat(corners).convertTo(_corners, _corners.fixedType() ? _corners.type() : CV_32F);
+    if (_cornersQuality.needed()) {
+        Mat(cornersQuality).convertTo(_cornersQuality, _cornersQuality.fixedType() ? _cornersQuality.type() : CV_32F);
+    }
+
+    return true;
+}
+
 #endif
 
 #ifdef HAVE_OPENVX
@@ -562,6 +767,219 @@ cvGoodFeaturesToTrack( const void* _image, void*, void*,
 
     CV_Assert( _corners && _corner_count );
     cv::goodFeaturesToTrack( image, corners, *_corner_count, quality_level,
+        min_distance, mask, block_size, use_harris != 0, harris_k );
+
+    size_t i, ncorners = corners.size();
+    for( i = 0; i < ncorners; i++ )
+        _corners[i] = cvPoint2D32f(corners[i]);
+    *_corner_count = (int)ncorners;
+}
+
+void cv::betterFeaturesToTrack( InputArray image, OutputArray corners,
+                              int maxCorners, double qualityLevel, double minDistance,
+                              InputArray mask, int blockSize, bool useHarrisDetector, double k )
+{
+    return betterFeaturesToTrack(image, corners, maxCorners, qualityLevel, minDistance,
+                               mask, noArray(), blockSize, 3, useHarrisDetector, k);
+}
+
+void cv::betterFeaturesToTrack( InputArray image, OutputArray corners,
+                              int maxCorners, double qualityLevel, double minDistance,
+                              InputArray mask, int blockSize, int gradientSize, bool useHarrisDetector, double k )
+{
+    return betterFeaturesToTrack( image, corners, maxCorners, qualityLevel, minDistance,
+                                mask, noArray(), blockSize, gradientSize, useHarrisDetector, k );
+}
+
+void cv::betterFeaturesToTrack( InputArray _image, OutputArray _corners,
+                              int maxCorners, double qualityLevel, double minDistance,
+                              InputArray _mask, OutputArray _cornersQuality, int blockSize, int gradientSize,
+                              bool useHarrisDetector, double harrisK )
+{
+    CV_INSTRUMENT_REGION();
+
+    CV_Assert( qualityLevel > 0 && minDistance >= 0 && maxCorners >= 0 );
+    CV_Assert( _mask.empty() || (_mask.type() == CV_8UC1 && _mask.sameSize(_image)) );
+
+    CV_OCL_RUN(_image.dims() <= 2 && _image.isUMat(),
+               ocl_betterFeaturesToTrack(_image, _corners, maxCorners, qualityLevel, minDistance,
+                                       _mask, _cornersQuality, blockSize, gradientSize, useHarrisDetector, harrisK))
+
+    Mat image = _image.getMat(), eig, eigDiagonal, tmp;
+    if (image.empty())
+    {
+        _corners.release();
+        _cornersQuality.release();
+        return;
+    }
+
+    // Disabled due to bad accuracy
+    CV_OVX_RUN(false && useHarrisDetector && _mask.empty() &&
+               !ovx::skipSmallImages<VX_KERNEL_HARRIS_CORNERS>(image.cols, image.rows),
+               openvx_harris(image, _corners, maxCorners, qualityLevel, minDistance, blockSize, gradientSize, harrisK))
+
+    if( useHarrisDetector ) {
+        cornerHarris( image, eig, blockSize, gradientSize, harrisK );
+        cornerHarrisDiagonal( image, eigDiagonal, blockSize, gradientSize, harrisK );
+    } else {
+        cornerMinEigenVal( image, eig, blockSize, gradientSize );
+        cornerMinEigenValDiagonal( image, eigDiagonal, blockSize, gradientSize );
+    }
+
+    Mat eigMax;
+    cv::max(eig, eigDiagonal, eigMax);
+
+    double maxVal = 0;
+    minMaxLoc( eigMax, 0, &maxVal, 0, 0, _mask );
+    threshold( eigMax, eigMax, maxVal*qualityLevel, 0, THRESH_TOZERO );
+    dilate( eigMax, tmp, Mat());
+
+    Size imgsize = image.size();
+    std::vector<const float*> tmpCorners;
+
+    // collect list of pointers to features - put them into temporary image
+    Mat mask = _mask.getMat();
+    for( int y = 1; y < imgsize.height - 1; y++ )
+    {
+        const float* eig_data = (const float*)eigMax.ptr(y);
+        const float* tmp_data = (const float*)tmp.ptr(y);
+        const uchar* mask_data = mask.data ? mask.ptr(y) : 0;
+
+        for( int x = 1; x < imgsize.width - 1; x++ )
+        {
+            float val = eig_data[x];
+            if( val != 0 && val == tmp_data[x] && (!mask_data || mask_data[x]) )
+                tmpCorners.push_back(eig_data + x);
+        }
+    }
+
+    std::vector<Point2f> corners;
+    std::vector<float> cornersQuality;
+    size_t i, j, total = tmpCorners.size(), ncorners = 0;
+
+    if (total == 0)
+    {
+        _corners.release();
+        _cornersQuality.release();
+        return;
+    }
+
+    std::sort( tmpCorners.begin(), tmpCorners.end(), greaterThanPtr() );
+
+    if (minDistance >= 1)
+    {
+         // Partition the image into larger grids
+        int w = image.cols;
+        int h = image.rows;
+
+        const int cell_size = cvRound(minDistance);
+        const int grid_width = (w + cell_size - 1) / cell_size;
+        const int grid_height = (h + cell_size - 1) / cell_size;
+
+        std::vector<std::vector<Point2f> > grid(grid_width*grid_height);
+
+        minDistance *= minDistance;
+
+        for( i = 0; i < total; i++ )
+        {
+            int ofs = (int)((const uchar*)tmpCorners[i] - eigMax.ptr());
+            int y = (int)(ofs / eigMax.step);
+            int x = (int)((ofs - y*eigMax.step)/sizeof(float));
+
+            bool good = true;
+
+            int x_cell = x / cell_size;
+            int y_cell = y / cell_size;
+
+            int x1 = x_cell - 1;
+            int y1 = y_cell - 1;
+            int x2 = x_cell + 1;
+            int y2 = y_cell + 1;
+
+            // boundary check
+            x1 = std::max(0, x1);
+            y1 = std::max(0, y1);
+            x2 = std::min(grid_width-1, x2);
+            y2 = std::min(grid_height-1, y2);
+
+            for( int yy = y1; yy <= y2; yy++ )
+            {
+                for( int xx = x1; xx <= x2; xx++ )
+                {
+                    std::vector <Point2f> &m = grid[yy*grid_width + xx];
+
+                    if( m.size() )
+                    {
+                        for(j = 0; j < m.size(); j++)
+                        {
+                            float dx = x - m[j].x;
+                            float dy = y - m[j].y;
+
+                            if( dx*dx + dy*dy < minDistance )
+                            {
+                                good = false;
+                                goto break_out;
+                            }
+                        }
+                    }
+                }
+            }
+
+            break_out:
+
+            if (good)
+            {
+                grid[y_cell*grid_width + x_cell].push_back(Point2f((float)x, (float)y));
+
+                cornersQuality.push_back(*tmpCorners[i]);
+
+                corners.push_back(Point2f((float)x, (float)y));
+                ++ncorners;
+
+                if( maxCorners > 0 && (int)ncorners == maxCorners )
+                    break;
+            }
+        }
+    }
+    else
+    {
+        for( i = 0; i < total; i++ )
+        {
+            cornersQuality.push_back(*tmpCorners[i]);
+
+            int ofs = (int)((const uchar*)tmpCorners[i] - eigMax.ptr());
+            int y = (int)(ofs / eigMax.step);
+            int x = (int)((ofs - y*eigMax.step)/sizeof(float));
+
+            corners.push_back(Point2f((float)x, (float)y));
+            ++ncorners;
+
+            if( maxCorners > 0 && (int)ncorners == maxCorners )
+                break;
+        }
+    }
+
+    Mat(corners).convertTo(_corners, _corners.fixedType() ? _corners.type() : CV_32F);
+    if (_cornersQuality.needed()) {
+        Mat(cornersQuality).convertTo(_cornersQuality, _cornersQuality.fixedType() ? _cornersQuality.type() : CV_32F);
+    }
+}
+
+CV_IMPL void
+cvBetterFeaturesToTrack( const void* _image, void*, void*,
+                       CvPoint2D32f* _corners, int *_corner_count,
+                       double quality_level, double min_distance,
+                       const void* _maskImage, int block_size,
+                       int use_harris, double harris_k )
+{
+    cv::Mat image = cv::cvarrToMat(_image), mask;
+    std::vector<cv::Point2f> corners;
+
+    if( _maskImage )
+        mask = cv::cvarrToMat(_maskImage);
+
+    CV_Assert( _corners && _corner_count );
+    cv::betterFeaturesToTrack( image, corners, *_corner_count, quality_level,
         min_distance, mask, block_size, use_harris != 0, harris_k );
 
     size_t i, ncorners = corners.size();

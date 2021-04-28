@@ -464,6 +464,64 @@ void cv::Sobel( InputArray _src, OutputArray _dst, int ddepth, int dx, int dy,
     sepFilter2D(src, dst, ddepth, kx, ky, Point(-1, -1), delta, borderType );
 }
 
+void cv::SobelDiagonal( InputArray _src, OutputArray _dst, int ddepth, int dxy,
+                int ksize, double scale, double delta, int borderType )
+{
+    CV_INSTRUMENT_REGION();
+
+    CV_Assert(!_src.empty());
+
+    int stype = _src.type(), sdepth = CV_MAT_DEPTH(stype), cn = CV_MAT_CN(stype);
+    if (ddepth < 0)
+        ddepth = sdepth;
+    int dtype = CV_MAKE_TYPE(ddepth, cn);
+    _dst.create( _src.size(), dtype );
+
+    int ktype = std::max(CV_32F, std::max(ddepth, sdepth));
+
+    Mat kxy(3, 3, ktype);
+    if ( dxy == 1 ) {
+        float SD[9] = {-2., -1., 0.,
+                       -1., 0., 1.,
+                       0., 1., 2.};
+        memcpy(kxy.data, SD, sizeof(SD));
+    } else {
+        float SD[9] = {0., -1., -2.,
+                       1., 0., -1.,
+                       2., 1., 0.};
+        memcpy(kxy.data, SD, sizeof(SD));
+    }
+    if( scale != 1 )
+    {
+        kxy *= scale;
+    }
+
+    /*CV_OCL_RUN(ocl::isOpenCLActivated() && _dst.isUMat() && _src.dims() <= 2 && ksize == 3 &&
+               (size_t)_src.rows() > ky.total() && (size_t)_src.cols() > kx.total(),
+               ocl_sepFilter3x3_8UC1(_src, _dst, ddepth, kx, ky, delta, borderType));*/
+
+    /*CV_OCL_RUN(ocl::isOpenCLActivated() && _dst.isUMat() && _src.dims() <= 2 && (size_t)_src.rows() > kx.total() && (size_t)_src.cols() > kx.total(),
+               ocl_sepFilter2D(_src, _dst, ddepth, kx, ky, Point(-1, -1), delta, borderType))*/
+
+    Mat src = _src.getMat();
+    Mat dst = _dst.getMat();
+
+//    Point ofs;
+//    Size wsz(src.cols, src.rows);
+//    if(!(borderType & BORDER_ISOLATED))
+//        src.locateROI( wsz, ofs );
+
+    /*CALL_HAL(sobel, cv_hal_sobel, src.ptr(), src.step, dst.ptr(), dst.step, src.cols, src.rows, sdepth, ddepth, cn,
+             ofs.x, ofs.y, wsz.width - src.cols - ofs.x, wsz.height - src.rows - ofs.y, dx, dy, ksize, scale, delta, borderType&~BORDER_ISOLATED);*/
+
+    /*CV_OVX_RUN(true,
+               openvx_sobel(src, dst, dx, dy, ksize, scale, delta, borderType))*/
+
+    //CV_IPP_RUN_FAST(ipp_Deriv(src, dst, dx, dy, ksize, scale, delta, borderType));
+
+    filter2D(src, dst, ddepth, kxy, Point(-1, -1), delta, borderType );
+}
+
 
 void cv::Scharr( InputArray _src, OutputArray _dst, int ddepth, int dx, int dy,
                  double scale, double delta, int borderType )
@@ -514,6 +572,62 @@ void cv::Scharr( InputArray _src, OutputArray _dst, int ddepth, int dx, int dy,
     //CV_IPP_RUN_FAST(ipp_Deriv(src, dst, dx, dy, 0, scale, delta, borderType));
 
     sepFilter2D( src, dst, ddepth, kx, ky, Point(-1, -1), delta, borderType );
+}
+
+void cv::ScharrDiagonal( InputArray _src, OutputArray _dst, int ddepth, int dxy,
+                 double scale, double delta, int borderType )
+{
+    CV_INSTRUMENT_REGION();
+
+    CV_Assert(!_src.empty());
+
+    int stype = _src.type(), sdepth = CV_MAT_DEPTH(stype), cn = CV_MAT_CN(stype);
+    if (ddepth < 0)
+        ddepth = sdepth;
+    int dtype = CV_MAKETYPE(ddepth, cn);
+    _dst.create( _src.size(), dtype );
+
+    int ktype = std::max(CV_32F, std::max(ddepth, sdepth));
+
+    Mat kxy(3, 3, ktype);
+    if ( dxy == 1 ) {
+        float SD[9] = {10., 3., 0.,
+                       3., 0., -3.,
+                       0., -3., -10.};
+        memcpy(kxy.data, SD, sizeof(SD));
+    } else {
+        float SD[9] = {0., 3., 10.,
+                       -3., 0., 3.,
+                       -10., -3., 0.};
+        memcpy(kxy.data, SD, sizeof(SD));
+    }
+    if( scale != 1 )
+    {
+        kxy *= scale;
+    }
+
+    /*CV_OCL_RUN(ocl::isOpenCLActivated() && _dst.isUMat() && _src.dims() <= 2 &&
+               (size_t)_src.rows() > ky.total() && (size_t)_src.cols() > kx.total(),
+               ocl_sepFilter3x3_8UC1(_src, _dst, ddepth, kx, ky, delta, borderType));*/
+
+    /*CV_OCL_RUN(ocl::isOpenCLActivated() && _dst.isUMat() && _src.dims() <= 2 &&
+               (size_t)_src.rows() > kx.total() && (size_t)_src.cols() > kx.total(),
+               ocl_sepFilter2D(_src, _dst, ddepth, kx, ky, Point(-1, -1), delta, borderType))*/
+
+    Mat src = _src.getMat();
+    Mat dst = _dst.getMat();
+
+//    Point ofs;
+//    Size wsz(src.cols, src.rows);
+//    if(!(borderType & BORDER_ISOLATED))
+//        src.locateROI( wsz, ofs );
+
+/*    CALL_HAL(scharr, cv_hal_scharr, src.ptr(), src.step, dst.ptr(), dst.step, src.cols, src.rows, sdepth, ddepth, cn,
+             ofs.x, ofs.y, wsz.width - src.cols - ofs.x, wsz.height - src.rows - ofs.y, dx, dy, scale, delta, borderType&~BORDER_ISOLATED);*/
+
+    //CV_IPP_RUN_FAST(ipp_Deriv(src, dst, dx, dy, 0, scale, delta, borderType));
+
+    filter2D( src, dst, ddepth, kxy, Point(-1, -1), delta, borderType );
 }
 
 #ifdef HAVE_OPENCL

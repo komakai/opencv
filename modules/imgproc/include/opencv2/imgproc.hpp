@@ -1674,6 +1674,11 @@ CV_EXPORTS_W void Sobel( InputArray src, OutputArray dst, int ddepth,
                          double scale = 1, double delta = 0,
                          int borderType = BORDER_DEFAULT );
 
+CV_EXPORTS_W void SobelDiagonal( InputArray src, OutputArray dst, int ddepth,
+                                 int dxy, int ksize = 3,
+                                 double scale = 1, double delta = 0,
+                                 int borderType = BORDER_DEFAULT );
+
 /** @brief Calculates the first order image derivative in both x and y using a Sobel operator
 
 Equivalent to calling:
@@ -1722,6 +1727,10 @@ applied (see #getDerivKernels for details).
 CV_EXPORTS_W void Scharr( InputArray src, OutputArray dst, int ddepth,
                           int dx, int dy, double scale = 1, double delta = 0,
                           int borderType = BORDER_DEFAULT );
+
+CV_EXPORTS_W void ScharrDiagonal( InputArray src, OutputArray dst, int ddepth,
+                                  int dxy, double scale = 1, double delta = 0,
+                                  int borderType = BORDER_DEFAULT );
 
 /** @example samples/cpp/laplace.cpp
 An example using Laplace transformations for edge detection
@@ -1822,6 +1831,10 @@ CV_EXPORTS_W void cornerMinEigenVal( InputArray src, OutputArray dst,
                                      int blockSize, int ksize = 3,
                                      int borderType = BORDER_DEFAULT );
 
+CV_EXPORTS_W void cornerMinEigenValDiagonal( InputArray src, OutputArray dst,
+                                             int blockSize, int ksize = 3,
+                                             int borderType = BORDER_DEFAULT );
+
 /** @brief Harris corner detector.
 
 The function runs the Harris corner detector on the image. Similarly to cornerMinEigenVal and
@@ -1844,6 +1857,10 @@ size as src .
 CV_EXPORTS_W void cornerHarris( InputArray src, OutputArray dst, int blockSize,
                                 int ksize, double k,
                                 int borderType = BORDER_DEFAULT );
+
+CV_EXPORTS_W void cornerHarrisDiagonal( InputArray src, OutputArray dst, int blockSize,
+                                        int ksize, double k,
+                                        int borderType = BORDER_DEFAULT );
 
 /** @brief Calculates eigenvalues and eigenvectors of image blocks for corner detection.
 
@@ -2000,6 +2017,17 @@ CV_EXPORTS_W void goodFeaturesToTrack( InputArray image, OutputArray corners,
                                      int gradientSize, bool useHarrisDetector = false,
                                      double k = 0.04 );
 
+CV_EXPORTS_W void betterFeaturesToTrack( InputArray image, OutputArray corners,
+                                         int maxCorners, double qualityLevel, double minDistance,
+                                         InputArray mask = noArray(), int blockSize = 3,
+                                         bool useHarrisDetector = false, double k = 0.04 );
+
+CV_EXPORTS_W void betterFeaturesToTrack( InputArray image, OutputArray corners,
+                                         int maxCorners, double qualityLevel, double minDistance,
+                                         InputArray mask, int blockSize,
+                                         int gradientSize, bool useHarrisDetector = false,
+                                         double k = 0.04 );
+
 /** @brief Same as above, but returns also quality measure of the detected corners.
 
 @param image Input 8-bit or floating-point 32-bit, single-channel image.
@@ -2026,6 +2054,12 @@ or #cornerMinEigenVal.
 @param k Free parameter of the Harris detector.
  */
 CV_EXPORTS CV_WRAP_AS(goodFeaturesToTrackWithQuality) void goodFeaturesToTrack(
+        InputArray image, OutputArray corners,
+        int maxCorners, double qualityLevel, double minDistance,
+        InputArray mask, OutputArray cornersQuality, int blockSize = 3,
+        int gradientSize = 3, bool useHarrisDetector = false, double k = 0.04);
+
+CV_EXPORTS CV_WRAP_AS(betterFeaturesToTrackWithQuality) void betterFeaturesToTrack(
         InputArray image, OutputArray corners,
         int maxCorners, double qualityLevel, double minDistance,
         InputArray mask, OutputArray cornersQuality, int blockSize = 3,
