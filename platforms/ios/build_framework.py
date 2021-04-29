@@ -42,7 +42,7 @@ from cv_build_utils import execute, print_error, get_xcode_major, get_xcode_sett
 IPHONEOS_DEPLOYMENT_TARGET='9.0'  # default, can be changed via command line options or environment variable
 
 class Builder:
-    def __init__(self, opencv, contrib, dynamic, bitcodedisabled, exclude, disable, enablenonfree, targets, debug, debug_info, framework_name, run_tests, build_docs):
+    def __init__(self, opencv, contrib, dynamic, bitcodedisabled, exclude, disable, enablenonfree, targets, debug, debug_info, framework_name, run_tests, build_docs, build_perf_tests):
         self.opencv = os.path.abspath(opencv)
         self.contrib = None
         if contrib:
@@ -63,6 +63,7 @@ class Builder:
         self.framework_name = framework_name
         self.run_tests = run_tests
         self.build_docs = build_docs
+        self.build_perf_tests = build_perf_tests
 
     def checkCMakeVersion(self):
         if get_xcode_version() >= (12, 2):
@@ -191,6 +192,10 @@ class Builder:
         if self.debug_info:
             args += [
                 "-DBUILD_WITH_DEBUG_INFO=ON"
+            ]
+        if self.build_perf_tests:
+            args += [
+                "-DBUILD_PERF_TESTS=ON"
             ]
 
         if len(self.exclude) > 0:
@@ -509,6 +514,7 @@ if __name__ == "__main__":
     parser.add_argument('--legacy_build', default=False, dest='legacy_build', action='store_true', help='Build legacy opencv2 framework (default: False, equivalent to "--framework_name=opencv2 --without=objc")')
     parser.add_argument('--run_tests', default=False, dest='run_tests', action='store_true', help='Run tests')
     parser.add_argument('--build_docs', default=False, dest='build_docs', action='store_true', help='Build docs')
+    parser.add_argument('--build_perf_tests', default=False, dest='build_perf_tests', action='store_true', help='Build performance tests')
 
     args, unknown_args = parser.parse_known_args()
     if unknown_args:
@@ -562,6 +568,6 @@ if __name__ == "__main__":
         if iphonesimulator_archs:
             targets.append((iphonesimulator_archs, "iPhoneSimulator"))
 
-    b = iOSBuilder(args.opencv, args.contrib, args.dynamic, args.bitcodedisabled, args.without, args.disable, args.enablenonfree, targets, args.debug, args.debug_info, args.framework_name, args.run_tests, args.build_docs)
+    b = iOSBuilder(args.opencv, args.contrib, args.dynamic, args.bitcodedisabled, args.without, args.disable, args.enablenonfree, targets, args.debug, args.debug_info, args.framework_name, args.run_tests, args.build_docs, args.build_perf_tests)
 
     b.build(args.out)
