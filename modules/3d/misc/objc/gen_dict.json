@@ -1,0 +1,27 @@
+
+{
+    "enum_fix" : {
+        "VolumeParams" : { "VolumeType": "VolType" }
+    },
+    "func_arg_fix" : {
+        "Odometry" : {
+            "(Odometry*)create:(NSString*)odometryType" : { "create" : {"name" : "createOdometry"} }
+        },
+        "FastICPOdometry" : {
+            "(FastICPOdometry*)create:(Mat*)cameraMatrix" : { "create" : {"name" : "createFastICPOdometry"} }
+        },
+        "ICPOdometry" : {
+            "(ICPOdometry*)create:(Mat*)cameraMatrix" : { "create" : {"name" : "createICPOdometry"} }
+        },
+        "RgbdICPOdometry" : {
+            "(RgbdICPOdometry*)create:(Mat*)cameraMatrix" : { "create" : {"name" : "createRgbdICPOdometry"} }
+        },
+        "RgbdOdometry" : {
+            "(RgbdOdometry*)create:(Mat*)cameraMatrix" : { "create" : {"name" : "createRgbdOdometry"} }
+        },
+        "VolumeParams" : {
+            "defaultParams" : { "_volumeType" : { "ctype" : "VolType" } },
+            "coarseParams" : { "_volumeType" : { "ctype" : "VolType" } }
+        }
+    }
+}
