@@ -53,6 +53,12 @@ namespace cv
     int cornerEigenValsVecsLine_AVX(const float* dxdata, const float* dydata, float* cov_data_x2, float* cov_data_xy, float* cov_data_y2, int width);
 #endif // CV_TRY_AVX
 
+#if CV_TRY_AVX_512F
+    int calcMinEigenValLine_AVX512(const float* cov_x2, const float* cov_xy, const float* cov_y2, float* dst, int width);
+    int calcHarrisLine_AVX512(const float* cov_x2, const float* cov_xy, const float* cov_y2, float* dst, double k, int width);
+    int cornerEigenValsVecsLine_AVX512(const float* dxdata, const float* dydata, float* cov_data_x2, float* cov_data_xy, float* cov_data_y2, int width);
+#endif // CV_TRY_AVX_512F
+
 }
 
 #endif

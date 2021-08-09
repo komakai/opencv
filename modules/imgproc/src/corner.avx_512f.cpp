@@ -49,61 +49,61 @@
 namespace cv
 {
 
-int calcMinEigenValLine_AVX(const float* cov_x2, const float* cov_xy, const float* cov_y2, float* dst, int width)
+int calcMinEigenValLine_AVX2(const float* cov_x2, const float* cov_xy, const float* cov_y2, float* dst, int width)
 {
     int j = 0;
-    __m256 half = _mm256_set1_ps(0.5f);
-    for (; j <= width - 8; j += 8)
+    __m512 half = _mm512_set1_ps(0.5f);
+    for (; j <= width - 16; j += 16)
     {
-        __m256 v_a, v_b, v_c, v_t;
-        v_a = _mm256_loadu_ps(cov_x2 + j);
-        v_b = _mm256_loadu_ps(cov_xy + j);
-        v_c = _mm256_loadu_ps(cov_y2 + j);
+        __m512 v_a, v_b, v_c, v_t;
+        v_a = _mm512_loadu_ps(cov_x2 + j);
+        v_b = _mm512_loadu_ps(cov_xy + j);
+        v_c = _mm512_loadu_ps(cov_y2 + j);
 
-        v_a = _mm256_mul_ps(v_a, half);
-        v_c = _mm256_mul_ps(v_c, half);
-        v_t = _mm256_sub_ps(v_a, v_c);
-        v_t = _mm256_add_ps(_mm256_mul_ps(v_b, v_b), _mm256_mul_ps(v_t, v_t));
-        _mm256_storeu_ps(dst + j, _mm256_sub_ps(_mm256_add_ps(v_a, v_c), _mm256_sqrt_ps(v_t)));
+        v_a = _mm512_mul_ps(v_a, half);
+        v_c = _mm512_mul_ps(v_c, half);
+        v_t = _mm512_sub_ps(v_a, v_c);
+        v_t = _mm512_fmadd_ps(v_b, v_b, _mm512_mul_ps(v_t, v_t));
+        _mm512_storeu_ps(dst + j, _mm512_sub_ps(_mm512_add_ps(v_a, v_c), _mm512_sqrt_ps(v_t)));
     }
     return j;
 }
 
-int calcHarrisLine_AVX(const float* cov_x2, const float* cov_xy, const float* cov_y2, float* dst, double k, int width)
+int calcHarrisLine_AVX2(const float* cov_x2, const float* cov_xy, const float* cov_y2, float* dst, double k, int width)
 {
     int j = 0;
-    __m256 v_k = _mm256_set1_ps((float)k);
+    __m512 v_k = _mm512_set1_ps((float)k);
 
-    for (; j <= width - 8; j += 8)
+    for (; j <= width - 16; j += 16)
     {
-        __m256 v_a, v_b, v_c;
-        v_a = _mm256_loadu_ps(cov_x2 + j);
-        v_b = _mm256_loadu_ps(cov_xy + j);
-        v_c = _mm256_loadu_ps(cov_y2 + j);
+        __m512 v_a, v_b, v_c;
+        v_a = _mm512_loadu_ps(cov_x2 + j);
+        v_b = _mm512_loadu_ps(cov_xy + j);
+        v_c = _mm512_loadu_ps(cov_y2 + j);
 
-        __m256 v_ac_bb = _mm256_sub_ps(_mm256_mul_ps(v_a, v_c), _mm256_mul_ps(v_b, v_b));
-        __m256 v_ac = _mm256_add_ps(v_a, v_c);
-        __m256 v_dst = _mm256_sub_ps(v_ac_bb, _mm256_mul_ps(v_k, _mm256_mul_ps(v_ac, v_ac)));
-        _mm256_storeu_ps(dst + j, v_dst);
+        __m512 v_ac_bb = _mm512_sub_ps(_mm512_mul_ps(v_a, v_c), _mm512_mul_ps(v_b, v_b));
+        __m512 v_ac = _mm512_add_ps(v_a, v_c);
+        __m512 v_dst = _mm512_sub_ps(v_ac_bb, _mm512_mul_ps(v_k, _mm512_mul_ps(v_ac, v_ac)));
+        _mm512_storeu_ps(dst + j, v_dst);
     }
     return j;
 }
 
-int cornerEigenValsVecsLine_AVX(const float* dxdata, const float* dydata, float* cov_data_x2, float* cov_data_xy, float* cov_data_y2, int width)
+int cornerEigenValsVecsLine_AVX2(const float* dxdata, const float* dydata, float* cov_data_x2, float* cov_data_xy, float* cov_data_y2, int width)
 {
     int j = 0;
-    for (; j <= width - 8; j += 8)
+    for (; j <= width - 16; j += 16)
     {
-        __m256 v_dx = _mm256_loadu_ps(dxdata + j);
-        __m256 v_dy = _mm256_loadu_ps(dydata + j);
+        __m512 v_dx = _mm512_loadu_ps(dxdata + j);
+        __m512 v_dy = _mm512_loadu_ps(dydata + j);
 
-        __m256 v_dst;
-        v_dst = _mm256_mul_ps(v_dx, v_dx);
-        _mm256_storeu_ps(cov_data_x2 + j, v_dst);
-        v_dst = _mm256_mul_ps(v_dx, v_dy);
-        _mm256_storeu_ps(cov_data_xy + j, v_dst);
-        v_dst = _mm256_mul_ps(v_dy, v_dy);
-        _mm256_storeu_ps(cov_data_y2 + j, v_dst);
+        __m512 v_dst;
+        v_dst = _mm512_mul_ps(v_dx, v_dx);
+        _mm512_storeu_ps(cov_data_x2 + j, v_dst);
+        v_dst = _mm512_mul_ps(v_dx, v_dy);
+        _mm512_storeu_ps(cov_data_xy + j, v_dst);
+        v_dst = _mm512_mul_ps(v_dy, v_dy);
+        _mm512_storeu_ps(cov_data_y2 + j, v_dst);
     }
     return j;
 }

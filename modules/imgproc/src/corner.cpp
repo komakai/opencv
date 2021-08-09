@@ -53,6 +53,9 @@ static void calcMinEigenVal( const Mat& _cov_x2, const Mat& _cov_xy, const Mat& 
 {
     int i, j;
     Size size = _cov_x2.size();
+#if CV_TRY_AVX_512F
+    bool haveAvx512f = CV_CPU_HAS_SUPPORT_AVX_512F;
+#endif
 #if CV_TRY_AVX
     bool haveAvx = CV_CPU_HAS_SUPPORT_AVX;
 #endif
@@ -69,12 +72,17 @@ static void calcMinEigenVal( const Mat& _cov_x2, const Mat& _cov_xy, const Mat& 
         const float* cov_xy = _cov_xy.ptr<float>(i);
         const float* cov_y2 = _cov_y2.ptr<float>(i);
         float* dst = _dst.ptr<float>(i);
-#if CV_TRY_AVX
-        if( haveAvx )
-            j = calcMinEigenValLine_AVX(cov_x2, cov_xy, cov_y2, dst, size.width);
+#if CV_TRY_AVX_512F
+        if( haveAvx512f )
+            j = calcMinEigenValLine_AVX512(cov_x2, cov_xy, cov_y2, dst, size.width);
         else
+#endif // CV_TRY_AVX_512F
+#if CV_TRY_AVX
+            if( haveAvx )
+                j = calcMinEigenValLine_AVX(cov_x2, cov_xy, cov_y2, dst, size.width);
+            else
 #endif // CV_TRY_AVX
-            j = 0;
+                j = 0;
 
 #if CV_SIMD128
         {
@@ -110,6 +118,9 @@ static void calcHarris( const Mat& _cov_x2, const Mat& _cov_xy, const Mat& _cov_
 {
     int i, j;
     Size size = _cov_x2.size();
+#if CV_TRY_AVX_512F
+    bool haveAvx512f = CV_CPU_HAS_SUPPORT_AVX_512F;
+#endif
 #if CV_TRY_AVX
     bool haveAvx = CV_CPU_HAS_SUPPORT_AVX;
 #endif
@@ -127,12 +138,17 @@ static void calcHarris( const Mat& _cov_x2, const Mat& _cov_xy, const Mat& _cov_
         const float* cov_y2 = _cov_y2.ptr<float>(i);
         float* dst = _dst.ptr<float>(i);
 
-#if CV_TRY_AVX
-        if( haveAvx )
-            j = calcHarrisLine_AVX(cov_x2, cov_xy, cov_y2, dst, k, size.width);
+#if CV_TRY_AVX_512F
+        if( haveAvx512f )
+            j = calcHarrisLine_AVX512(cov_x2, cov_xy, cov_y2, dst, k, size.width);
         else
+#endif // CV_TRY_AVX_512F
+#if CV_TRY_AVX
+            if( haveAvx )
+                j = calcHarrisLine_AVX(cov_x2, cov_xy, cov_y2, dst, k, size.width);
+            else
 #endif // CV_TRY_AVX
-            j = 0;
+                j = 0;
 
 #if CV_SIMD128
         {
@@ -250,6 +266,9 @@ cornerEigenValsVecs( const Mat& src, Mat& eigenv, int block_size,
                      int aperture_size, int op_type, double k=0.,
                      int borderType=BORDER_DEFAULT )
 {
+#if CV_TRY_AVX_512F
+    bool haveAvx512f = CV_CPU_HAS_SUPPORT_AVX_512F;
+#endif
 #if CV_TRY_AVX
     bool haveAvx = CV_CPU_HAS_SUPPORT_AVX;
 #endif
@@ -290,12 +309,17 @@ cornerEigenValsVecs( const Mat& src, Mat& eigenv, int block_size,
         const float* dxdata = Dx.ptr<float>(i);
         const float* dydata = Dy.ptr<float>(i);
 
-#if CV_TRY_AVX
-        if( haveAvx )
-            j = cornerEigenValsVecsLine_AVX(dxdata, dydata, cov_data_x2, cov_data_xy, cov_data_y2, size.width);
+#if CV_TRY_AVX_512F
+        if( haveAvx512f )
+            j = cornerEigenValsVecsLine_AVX512(dxdata, dydata, cov_data_x2, cov_data_xy, cov_data_y2, size.width);
         else
+#endif // CV_TRY_AVX_512F
+#if CV_TRY_AVX
+            if( haveAvx )
+                j = cornerEigenValsVecsLine_AVX(dxdata, dydata, cov_data_x2, cov_data_xy, cov_data_y2, size.width);
+            else
 #endif // CV_TRY_AVX
-            j = 0;
+                j = 0;
 
 #if CV_SIMD128
         {
