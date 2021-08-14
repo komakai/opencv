@@ -53,9 +53,6 @@ static void calcMinEigenVal( const Mat& _cov_x2, const Mat& _cov_xy, const Mat& 
 {
     int i, j;
     Size size = _cov_x2.size();
-#if CV_TRY_AVX
-    bool haveAvx = CV_CPU_HAS_SUPPORT_AVX;
-#endif
 
     if( _cov_x2.isContinuous() && _dst.isContinuous() )
     {
@@ -69,32 +66,23 @@ static void calcMinEigenVal( const Mat& _cov_x2, const Mat& _cov_xy, const Mat& 
         const float* cov_xy = _cov_xy.ptr<float>(i);
         const float* cov_y2 = _cov_y2.ptr<float>(i);
         float* dst = _dst.ptr<float>(i);
-#if CV_TRY_AVX
-        if( haveAvx )
-            j = calcMinEigenValLine_AVX(cov_x2, cov_xy, cov_y2, dst, size.width);
-        else
-#endif // CV_TRY_AVX
-            j = 0;
-
-#if CV_SIMD128
+        j = 0;
+#if CV_SIMD
+        v_float32 half = vx_setall(0.5f);
+        for( ; j <= size.width - v_float32::nlanes; j += v_float32::nlanes )
         {
-            v_float32x4 half = v_setall_f32(0.5f);
-            for( ; j <= size.width - v_float32x4::nlanes; j += v_float32x4::nlanes )
-            {
-                v_float32x4 v_a, v_b, v_c, v_t;
-                v_a = v_load(cov_x2 + j);
-                v_b = v_load(cov_xy + j);
-                v_c = v_load(cov_y2 + j);
+            v_float32 v_a, v_b, v_c, v_t;
+            v_a = v_load(cov_x2 + j);
+            v_b = v_load(cov_xy + j);
+            v_c = v_load(cov_y2 + j);
 
-                v_a *= half;
-                v_c *= half;
-                v_t = v_a - v_c;
-                v_t = v_muladd(v_b, v_b, (v_t * v_t));
-                v_store(dst + j, (v_a + v_c) - v_sqrt(v_t));
-            }
+            v_a *= half;
+            v_c *= half;
+            v_t = v_a - v_c;
+            v_t = v_muladd(v_b, v_b, (v_t * v_t));
+            v_store(dst + j, (v_a + v_c) - v_sqrt(v_t));
         }
-#endif // CV_SIMD128
-
+#endif // CV_SIMD
         for( ; j < size.width; j++ )
         {
             float a = cov_x2[j]*0.5f;
@@ -110,9 +98,6 @@ static void calcHarris( const Mat& _cov_x2, const Mat& _cov_xy, const Mat& _cov_
 {
     int i, j;
     Size size = _cov_x2.size();
-#if CV_TRY_AVX
-    bool haveAvx = CV_CPU_HAS_SUPPORT_AVX;
-#endif
 
     if( _cov_x2.isContinuous() && _dst.isContinuous() )
     {
@@ -126,33 +111,23 @@ static void calcHarris( const Mat& _cov_x2, const Mat& _cov_xy, const Mat& _cov_
         const float* cov_xy = _cov_xy.ptr<float>(i);
         const float* cov_y2 = _cov_y2.ptr<float>(i);
         float* dst = _dst.ptr<float>(i);
+        j = 0;
+#if CV_SIMD
+        v_float32 v_k = vx_setall((float)k);
 
-#if CV_TRY_AVX
-        if( haveAvx )
-            j = calcHarrisLine_AVX(cov_x2, cov_xy, cov_y2, dst, k, size.width);
-        else
-#endif // CV_TRY_AVX
-            j = 0;
-
-#if CV_SIMD128
+        for( ; j <= size.width - v_float32::nlanes; j += v_float32::nlanes )
         {
-            v_float32x4 v_k = v_setall_f32((float)k);
+            v_float32 v_a, v_b, v_c;
+            v_a = v_load(cov_x2 + j);
+            v_b = v_load(cov_xy + j);
+            v_c = v_load(cov_y2 + j);
 
-            for( ; j <= size.width - v_float32x4::nlanes; j += v_float32x4::nlanes )
-            {
-                v_float32x4 v_a, v_b, v_c;
-                v_a = v_load(cov_x2 + j);
-                v_b = v_load(cov_xy + j);
-                v_c = v_load(cov_y2 + j);
-
-                v_float32x4 v_ac_bb = v_a * v_c - v_b * v_b;
-                v_float32x4 v_ac = v_a + v_c;
-                v_float32x4 v_dst = v_ac_bb - v_k * v_ac * v_ac;
-                v_store(dst + j, v_dst);
-            }
+            v_float32 v_ac_bb = v_a * v_c - v_b * v_b;
+            v_float32 v_ac = v_a + v_c;
+            v_float32 v_dst = v_ac_bb - v_k * v_ac * v_ac;
+            v_store(dst + j, v_dst);
         }
-#endif // CV_SIMD128
-
+#endif // CV_SIMD
         for( ; j < size.width; j++ )
         {
             float a = cov_x2[j];
@@ -250,10 +225,6 @@ cornerEigenValsVecs( const Mat& src, Mat& eigenv, int block_size,
                      int aperture_size, int op_type, double k=0.,
                      int borderType=BORDER_DEFAULT )
 {
-#if CV_TRY_AVX
-    bool haveAvx = CV_CPU_HAS_SUPPORT_AVX;
-#endif
-
     int depth = src.depth();
     double scale = (double)(1 << ((aperture_size > 0 ? aperture_size : 3) - 1)) * block_size;
     if( aperture_size < 0 )
@@ -289,33 +260,23 @@ cornerEigenValsVecs( const Mat& src, Mat& eigenv, int block_size,
         float* cov_data_y2 = cov_y2.ptr<float>(i);
         const float* dxdata = Dx.ptr<float>(i);
         const float* dydata = Dy.ptr<float>(i);
-
-#if CV_TRY_AVX
-        if( haveAvx )
-            j = cornerEigenValsVecsLine_AVX(dxdata, dydata, cov_data_x2, cov_data_xy, cov_data_y2, size.width);
-        else
-#endif // CV_TRY_AVX
-            j = 0;
-
-#if CV_SIMD128
+        j = 0;
+#if CV_SIMD
+        for( ; j <= size.width - v_float32::nlanes; j += v_float32::nlanes )
         {
-            for( ; j <= size.width - v_float32x4::nlanes; j += v_float32x4::nlanes )
-            {
-                v_float32x4 v_dx = v_load(dxdata + j);
-                v_float32x4 v_dy = v_load(dydata + j);
+            v_float32 v_dx = v_load(dxdata + j);
+            v_float32 v_dy = v_load(dydata + j);
 
-                v_float32x4 v_dst0, v_dst1, v_dst2;
-                v_dst0 = v_dx * v_dx;
-                v_dst1 = v_dx * v_dy;
-                v_dst2 = v_dy * v_dy;
+            v_float32 v_dst0, v_dst1, v_dst2;
+            v_dst0 = v_dx * v_dx;
+            v_dst1 = v_dx * v_dy;
+            v_dst2 = v_dy * v_dy;
 
-                v_store(cov_data_x2 + j, v_dst0);
-                v_store(cov_data_xy + j, v_dst1);
-                v_store(cov_data_y2 + j, v_dst2);
-            }
+            v_store(cov_data_x2 + j, v_dst0);
+            v_store(cov_data_xy + j, v_dst1);
+            v_store(cov_data_y2 + j, v_dst2);
         }
-#endif // CV_SIMD128
-
+#endif // CV_SIMD
         for( ; j < size.width; j++ )
         {
             float dx = dxdata[j];
