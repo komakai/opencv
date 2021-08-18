@@ -72,9 +72,9 @@ static void calcMinEigenVal( const Mat& _cov_x2, const Mat& _cov_xy, const Mat& 
         for( ; j <= size.width - v_float32::nlanes; j += v_float32::nlanes )
         {
             v_float32 v_a, v_b, v_c, v_t;
-            v_a = v_load(cov_x2 + j);
-            v_b = v_load(cov_xy + j);
-            v_c = v_load(cov_y2 + j);
+            v_a = vx_load(cov_x2 + j);
+            v_b = vx_load(cov_xy + j);
+            v_c = vx_load(cov_y2 + j);
 
             v_a *= half;
             v_c *= half;
@@ -118,9 +118,9 @@ static void calcHarris( const Mat& _cov_x2, const Mat& _cov_xy, const Mat& _cov_
         for( ; j <= size.width - v_float32::nlanes; j += v_float32::nlanes )
         {
             v_float32 v_a, v_b, v_c;
-            v_a = v_load(cov_x2 + j);
-            v_b = v_load(cov_xy + j);
-            v_c = v_load(cov_y2 + j);
+            v_a = vx_load(cov_x2 + j);
+            v_b = vx_load(cov_xy + j);
+            v_c = vx_load(cov_y2 + j);
 
             v_float32 v_ac_bb = v_a * v_c - v_b * v_b;
             v_float32 v_ac = v_a + v_c;
@@ -264,8 +264,8 @@ cornerEigenValsVecs( const Mat& src, Mat& eigenv, int block_size,
 #if CV_SIMD
         for( ; j <= size.width - v_float32::nlanes; j += v_float32::nlanes )
         {
-            v_float32 v_dx = v_load(dxdata + j);
-            v_float32 v_dy = v_load(dydata + j);
+            v_float32 v_dx = vx_load(dxdata + j);
+            v_float32 v_dy = vx_load(dydata + j);
 
             v_float32 v_dst0, v_dst1, v_dst2;
             v_dst0 = v_dx * v_dx;
